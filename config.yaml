@@ -1,0 +1,56 @@
+model:
+  model_path: "HuggingFaceTB/SmolLM-360M-Instruct"
+  quantization: 4 # 4 or 8 or null. Quantization refers to techniques for performing computations and storing tensors at lower bitwidths than floating point precision.
+  device_map: 'cpu' # support cuda, cpu and mps
+  torch_dtype: 'bfloat16'
+  target_modules: ['down_proj'] # finetune target layers, only `torch.nn.Linear` and `Conv1D` are supported
+  lora:
+    peft_lora_r: 8 # It determines the rank of the low-rank matrix and affects the representation ability of the model.
+    peft_lora_alpha: 16 # It is a scaling factor that adjusts the contribution of the low-rank matrix to the overall model.
+sft:
+  learning_rate_max: 5e-5
+  learning_rate_min: 1e-6
+  max_seq_length: 2048 # The maximum sequence length to use for the `ConstantLengthDataset` and for automaticallty creating the Dataset
+  clip_threshold: 10 # Limit the maximum amplitude of the data before performing sensitivity calculations or adding noise
+  dp_fedavg_gaussian_enabled: True # use gaussian noise after dp clipping in client side
+  epsilon: 1 # Used to quantify the strength of privacy protection. The smaller ε is, the stronger the privacy protection is. In the context of differential privacy, ε controls the uncertainty in the algorithm output caused by adding noise.
+  sensitivity: 1 # The maximum impact of a single piece of data on the query or analysis results
+  delta: 1e-5 # The upper limit of the probability that the system allows privacy protection to fail is given
+  training_arguments:
+    output_dir: "./output" # to be set by hydra
+    overwrite_output_dir: True
+    remove_unused_columns: True
+    seed: 1234
+    learning_rate: 5e-6 # to be set by the client
+    per_device_train_batch_size: 4
+    per_device_eval_batch_size: 4
+    gradient_accumulation_steps: 1
+    logging_steps: 20
+    log_level: "info"
+    logging_strategy: "steps"
+    num_train_epochs: 1
+    max_steps: -1
+    save_steps: 100
+    save_total_limit: 1
+    gradient_checkpointing: True
+    lr_scheduler_type: "cosine"
+    warmup_ratio: 0.2
+    do_eval: False
+client:
+  host: 127.0.0.1
+  port: 8088
+  local_dp: False
+  grpc_insecure: True # you can turn off this and set grpc_auth_cer_path to use secure gRPC channel
+  grpc_auth_cer_path: null # set your local root certificates path to here
+  weight_file_download_path: "./client/weights_update" # the path to save weight file from server side
+  auto_pull: True # set it to False if you want to copy weight file from server side manually. If it's False, make sure you already put the weight file to the right place before you call update function in client side.
+server:
+  host: 127.0.0.1
+  port: 8088
+  clip_threshold: 2 # dp fixed clipping threshold in server side
+  noise_multiplier: 1 # A larger noise_multiplier means more noise, thus stronger privacy protection, but may also lead to a decrease in model performance. A smaller noise_multiplier may provide better model performance but weaker privacy protection.
+  restful_url: "http://127.0.0.1:8080"
+  clients_file_save_path: "./save" # the path of the weight file sent by the clients
+  output_path: "./server_output" # the save path of the model file after weight aggregation and evaluation result file
+dataset_name: "medalpaca/medical_meadow_medical_flashcards"
+num_clients: 2 # client number in federated learning
